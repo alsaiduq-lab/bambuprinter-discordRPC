@@ -23,7 +23,7 @@ class BambuLabPresence:
             "Printer Online - Ready to Print",
             "Waiting for Next Print Job",
             "Bambu Lab Printer Standing By",
-            "System Ready"
+            "System Ready",
         ]
         self.selected_idle_message = None
         self.status_mapping = {
@@ -45,10 +45,9 @@ class BambuLabPresence:
             "QUEUED": "📋 Job Queued",
             "SLICING": "✂️ Preparing Print",
             "UPLOADING": "⬆️ Uploading File",
-            "FAILED": "❌ Print Failed"
+            "FAILED": "❌ Print Failed",
         }
 
-        # Printer state tracking
         self.sequence_id = 0
         self.bed_temper = None
         self.bed_target_temper = None
@@ -68,22 +67,18 @@ class BambuLabPresence:
         self.last_temp_update = 0
         self.temp_timeout = 5
 
-        # AMS status tracking
         self.ams_status = 0
         self.ams_rfid_status = 0
         self.current_tray = None
 
-        # Print status tracking
         self.gcode_state = "IDLE"
         self.gcode_start_time = "0"
         self.print_error = 0
         self.fail_reason = "0"
 
-        # Upload tracking
         self.upload_progress = 0
         self.upload_status = "idle"
 
-        # Message timing
         self.last_idle_message_time = 0
         self.idle_message_interval = 600
 
@@ -95,123 +90,103 @@ class BambuLabPresence:
 
     def update_idle_message(self):
         current_time = time.time()
-        if (current_time - self.last_idle_message_time >= self.idle_message_interval or
-                self.selected_idle_message is None):
+        if (
+            current_time - self.last_idle_message_time >= self.idle_message_interval
+            or self.selected_idle_message is None
+        ):
             self.selected_idle_message = random.choice(self.idle_messages)
             self.last_idle_message_time = current_time
             ic(f"Updated idle message to: {self.selected_idle_message}")
 
     def update_status(self, print_data):
-        """Update detailed printer status based on various state indicators"""
-        # First check for upload status
-        if 'upload' in print_data:
-            upload_data = print_data['upload']
-            if upload_data.get('status') != 'idle':
+        if "upload" in print_data:
+            upload_data = print_data["upload"]
+            if upload_data.get("status") != "idle":
                 self.current_status = "UPLOADING"
                 return
 
-        # Check for errors
         if self.print_error != 0:
             self.current_status = f"ERROR_{self.print_error}"
             return
 
-        # Check AMS status
-        if 'ams_status' in print_data:
-            ams_status = int(print_data.get('ams_status', 0))
+        if "ams_status" in print_data:
+            ams_status = int(print_data.get("ams_status", 0))
             if ams_status in [1, 2]:
                 self.current_status = "CHANGE_FILAMENT"
                 return
 
-        # Check print stages
         if self.gcode_state == "RUNNING":
-            if self.print_stage == "1":  # Preparing
-                stage_mapping = {
-                    1: "HEAT",
-                    2: "HOME",
-                    3: "CLEAN",
-                    4: "CALIBRATE",
-                    5: "FILAMENT"
-                }
+            if self.print_stage == "1":
+                stage_mapping = {1: "HEAT", 2: "HOME", 3: "CLEAN", 4: "CALIBRATE", 5: "FILAMENT"}
                 self.current_status = stage_mapping.get(self.print_sub_stage, "PREPARE")
                 return
 
-        # Check online status
-        if 'online' in print_data:
-            online_data = print_data.get('online', {})
-            if not online_data.get('status', True):
+        if "online" in print_data:
+            online_data = print_data.get("online", {})
+            if not online_data.get("status", True):
                 self.current_status = "OFFLINE"
                 return
 
-        # Default to gcode_state if no special status applies
         self.current_status = self.gcode_state
 
     @staticmethod
     def format_temperature(temp):
-        """Format temperature value"""
         try:
             if temp is None:
-                return "???"
+                return "??"
             temp_float = float(temp)
             return f"{int(round(temp_float))}"
         except (ValueError, TypeError):
-            return "???"
+            return "??"
 
     def handle_report_message(self, payload):
-        """Handle full printer status report based on documentation"""
-        if 'print' not in payload:
+        if "print" not in payload:
             return
 
-        print_data = payload['print']
+        print_data = payload["print"]
         current_time = time.time()
 
-        # Update basic printer state
-        if 'gcode_state' in print_data:
-            self.gcode_state = print_data.get('gcode_state', 'UNKNOWN')
+        if "gcode_state" in print_data:
+            self.gcode_state = print_data.get("gcode_state", "UNKNOWN")
             self.current_status = self.gcode_state
 
-        # Update temperatures
-        if 'bed_temper' in print_data:
-            self.bed_temper = float(print_data['bed_temper'])
+        if "bed_temper" in print_data:
+            self.bed_temper = float(print_data["bed_temper"])
             self.last_temp_update = current_time
-        if 'bed_target_temper' in print_data:
-            self.bed_target_temper = float(print_data['bed_target_temper'])
-        if 'nozzle_temper' in print_data:
-            self.nozzle_temper = float(print_data['nozzle_temper'])
+        if "bed_target_temper" in print_data:
+            self.bed_target_temper = float(print_data["bed_target_temper"])
+        if "nozzle_temper" in print_data:
+            self.nozzle_temper = float(print_data["nozzle_temper"])
             self.last_temp_update = current_time
-        if 'nozzle_target_temper' in print_data:
-            self.nozzle_target_temper = float(print_data['nozzle_target_temper'])
+        if "nozzle_target_temper" in print_data:
+            self.nozzle_target_temper = float(print_data["nozzle_target_temper"])
 
-        # Update print progress
-        if 'mc_percent' in print_data:
-            self.current_progress = float(print_data.get('mc_percent', 0))
-        if 'mc_remaining_time' in print_data:
-            self.remaining_time = int(print_data.get('mc_remaining_time', 0))
-        if 'layer_num' in print_data:
-            self.current_layer = int(print_data.get('layer_num', 0))
-        if 'total_layer_num' in print_data:
-            self.total_layer_num = int(print_data.get('total_layer_num', 0))
+        if "mc_percent" in print_data:
+            self.current_progress = float(print_data.get("mc_percent", 0))
+        if "mc_remaining_time" in print_data:
+            self.remaining_time = int(print_data.get("mc_remaining_time", 0))
+        if "layer_num" in print_data:
+            self.current_layer = int(print_data.get("layer_num", 0))
+        if "total_layer_num" in print_data:
+            self.total_layer_num = int(print_data.get("total_layer_num", 0))
 
-        # Update print error status
-        if 'print_error' in print_data:
-            self.print_error = int(print_data.get('print_error', 0))
+        if "print_error" in print_data:
+            self.print_error = int(print_data.get("print_error", 0))
 
-        # Update file information
-        if 'gcode_file' in print_data:
-            new_file = print_data['gcode_file']
-            if new_file:  # Only update if there's actually a filename
+        if "gcode_file" in print_data:
+            new_file = print_data["gcode_file"]
+            if new_file:
                 self.last_known_file = new_file
 
-        # Update print status
-        if self.gcode_state in ['RUNNING', 'PAUSE', 'PREPARE']:
+        if self.gcode_state in ["RUNNING", "PAUSE", "PREPARE"]:
             self.is_printing = True
-        elif self.gcode_state in ['IDLE', 'FAILED', 'FINISH']:
+        elif self.gcode_state in ["IDLE", "FAILED", "FINISH"]:
             self.is_printing = False
 
-        # Update print stages
-        if 'mc_print_stage' in print_data:
-            self.print_stage = print_data.get('mc_print_stage')
-        if 'mc_print_sub_stage' in print_data:
-            self.print_sub_stage = print_data.get('mc_print_sub_stage', 0)
+        if "mc_print_stage" in print_data:
+            self.print_stage = print_data.get("mc_print_stage")
+        if "mc_print_sub_stage" in print_data:
+            self.print_sub_stage = print_data.get("mc_print_sub_stage", 0)
 
         self.update_status(print_data)
 
@@ -233,10 +208,9 @@ class BambuLabPresence:
         try:
             status = self.status_mapping.get(self.current_status.upper(), "Status Unknown")
 
-            # Update details based on print status
             if self.is_printing:
                 if self.last_known_file:
-                    filename = self.last_known_file.rsplit('.', 1)[0]
+                    filename = self.last_known_file.rsplit(".", 1)[0]
                     progress_bar = self.create_progress_bar(self.current_progress)
                     details = f"{filename} [{progress_bar}] {self.current_progress:.1f}%"
                 else:
@@ -248,17 +222,15 @@ class BambuLabPresence:
                 else:
                     details = self.selected_idle_message or "Printer Ready"
 
-            # Check if temperatures are stale
             temps_stale = (current_time - self.last_temp_update) > self.temp_timeout
 
             if temps_stale:
-                bed_temp = "???"
-                nozzle_temp = "???"
+                bed_temp = "??"
+                nozzle_temp = "??"
             else:
                 bed_temp = self.format_temperature(self.bed_temper)
                 nozzle_temp = self.format_temperature(self.nozzle_temper)
 
-                # Add target temperatures if available
                 if self.bed_target_temper and float(self.bed_target_temper) > 0:
                     bed_temp = f"{bed_temp}/{int(float(self.bed_target_temper))}"
                 if self.nozzle_target_temper and float(self.nozzle_target_temper) > 0:
@@ -285,22 +257,19 @@ class BambuLabPresence:
 
     def check_initial_state(self):
         try:
-            # Request full printer status
             request = {
                 "pushing": {
                     "sequence_id": self.get_next_sequence_id(),
                     "command": "pushall",
                     "version": 1,
-                    "push_target": 1
+                    "push_target": 1,
                 }
             }
 
-            # Send request
             topic = f"device/{self.serial}/request"
             self.mqtt_client.publish(topic, json.dumps(request))
             ic("Requested initial printer state")
 
-            # Short delay to allow response
             time.sleep(2)
 
         except Exception as e:
@@ -327,9 +296,9 @@ class BambuLabPresence:
             ic("Received message on topic:", msg.topic)
             ic(payload)
 
-            if msg.topic.endswith('/task'):
+            if msg.topic.endswith("/task"):
                 self.handle_task_message(payload)
-            elif msg.topic.endswith('/report'):
+            elif msg.topic.endswith("/report"):
                 self.handle_report_message(payload)
 
         except Exception as e:
@@ -384,12 +353,13 @@ def main():
 ╚═══════════════════════════════════════╝
     """)
 
-    parser = argparse.ArgumentParser(description='Bambu Lab Presence')
-    parser.add_argument('--ip', required=True, help='Your Bambu Lab printer IP address')
-    parser.add_argument('--code', required=True, help='Your Bambu Lab printer access code')
-    parser.add_argument('--serial', required=True, help='Your Bambu Lab printer serial number')
-    parser.add_argument('--client', required=True,
-                        help='Your Discord app client ID (from the discord developer portal)')
+    parser = argparse.ArgumentParser(description="Bambu Lab Presence")
+    parser.add_argument("--ip", required=True, help="Your Bambu Lab printer IP address")
+    parser.add_argument("--code", required=True, help="Your Bambu Lab printer access code")
+    parser.add_argument("--serial", required=True, help="Your Bambu Lab printer serial number")
+    parser.add_argument(
+        "--client", required=True, help="Your Discord app client ID (from the discord developer portal)"
+    )
 
     args = parser.parse_args()
 
