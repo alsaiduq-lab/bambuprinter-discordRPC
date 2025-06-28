@@ -208,6 +208,16 @@ class BambuLabPresence:
         try:
             status = self.status_mapping.get(self.current_status.upper(), "Status Unknown")
 
+            bed_temp = self.format_temperature(self.bed_temper) if self.bed_temper is not None else "??"
+            nozzle_temp = self.format_temperature(self.nozzle_temper) if self.nozzle_temper is not None else "??"
+
+            if self.bed_target_temper is not None and float(self.bed_target_temper) > 0:
+                bed_temp = f"{bed_temp}/{int(float(self.bed_target_temper))}"
+            if self.nozzle_target_temper is not None and float(self.nozzle_target_temper) > 0:
+                nozzle_temp = f"{nozzle_temp}/{int(float(self.nozzle_target_temper))}"
+
+            state = f"🔧 {bed_temp}°C 🔥 {nozzle_temp}°C"
+
             if self.is_printing:
                 if self.last_known_file:
                     filename = self.last_known_file.rsplit(".", 1)[0]
@@ -221,22 +231,6 @@ class BambuLabPresence:
                     details = f"Error: {self.print_error}"
                 else:
                     details = self.selected_idle_message or "Printer Ready"
-
-            temps_stale = (current_time - self.last_temp_update) > self.temp_timeout
-
-            if temps_stale:
-                bed_temp = "??"
-                nozzle_temp = "??"
-            else:
-                bed_temp = self.format_temperature(self.bed_temper)
-                nozzle_temp = self.format_temperature(self.nozzle_temper)
-
-                if self.bed_target_temper and float(self.bed_target_temper) > 0:
-                    bed_temp = f"{bed_temp}/{int(float(self.bed_target_temper))}"
-                if self.nozzle_target_temper and float(self.nozzle_target_temper) > 0:
-                    nozzle_temp = f"{nozzle_temp}/{int(float(self.nozzle_target_temper))}"
-
-            state = f"🔧 {bed_temp}°C 🔥 {nozzle_temp}°C"
 
             if self.is_printing and self.remaining_time > 0:
                 state += f" ⏱️ {self.remaining_time}min"
